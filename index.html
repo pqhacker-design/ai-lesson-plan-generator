@@ -87,9 +87,13 @@
         <!-- Utility Functions and AI Logic -->
         <script type="module">
             // --- FIREBASE AND ENVIRONMENT SETUP ---
+            // NOTE: Bạn cần DÁN KHÓA API của mình vào đây để ứng dụng chạy trên GitHub Pages
+            // (Ví dụ: const apiKey = "AIzaSy...your...key";)
+            const apiKey = "YOUR_GEMINI_API_KEY_HERE"; // <<< THAY THẾ CHUỖI NÀY BẰNG KHÓA API CỦA BẠN
+            
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-            const apiKey = ""; // API Key for Gemini is handled by Canvas environment
+            
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
             // NOTE: Firestore is not strictly needed for this self-contained generation app, 
             // but the setup variables are required to be present as per instructions.
@@ -144,13 +148,13 @@
                     Phần 1: Vai trò và Nhiệm vụ (Role and Goal)
 [Vai trò] Bạn là một Trợ lý Sư phạm Chuyên sâu về xây dựng Kế hoạch Bài dạy (Giáo án) theo chuẩn Bộ Giáo dục và Đào tạo, đặc biệt là cấp Trung học Cơ sở (THCS).
 
-[Mục tiêu] Nhiệm vụ của bạn là viết, kiểm tra, và hoàn thiện Kế hoạch Bài dạy (KBD) cho giáo viên THCS theo đúng yêu cầu về nội dung và hình thức của Công văn 5112/BGDĐT-GDTrH ngày 01/12/2020, đảm bảo tính khoa học, sư phạm và phù hợp với thực tiễn.
+[Mục tiêu] Nhiệm vụ của bạn là viết, kiểm tra, và hoàn thiện Kế hoạch Bài dạy (KHBD) cho giáo viên THCS theo đúng yêu cầu về nội dung và hình thức của Công văn 5112/BGDĐT-GDTrH ngày 01/12/2020, đảm bảo tính khoa học, sư phạm và phù hợp với thực tiễn.
 
 [Nguyên tắc làm việc] Luôn đặt mục tiêu phát triển phẩm chất và năng lực học sinh làm trọng tâm.
 
-Phần 2: Yêu cầu về Nội dung và Cấu trúc KBD (Content and Structure Requirements)
-[Cấu trúc KBD] Kế hoạch Bài dạy bạn tạo ra phải tuân thủ cấu trúc của một KBD đầy đủ theo yêu cầu mới, bao gồm các thành phần sau:
-
+Phần 2: Yêu cầu về Nội dung và Cấu trúc KHBD (Content and Structure Requirements)
+[Cấu trúc KHBD] Kế hoạch Bài dạy bạn tạo ra phải tuân thủ cấu trúc của một KHBD đầy đủ theo yêu cầu mới, bao gồm các thành phần sau:
+Luôn sử dụng định dạng **LaTeX** ($a^2 + b^2 = c^2$) cho công thức toán học và khoa học.
 Tên Bài dạy/Chủ đề: (Ví dụ: Bài 1. Số hữu tỉ - Toán 7)
 
 Thời lượng: (Số tiết, ngày/buổi thực hiện)
@@ -199,7 +203,7 @@ Phản hồi & Tinh chỉnh (Lượt 2+): Sau khi giáo viên cung cấp thêm t
 Kiểm tra Công văn 5112: Cuối cùng, khi KBD đã hoàn thành, hãy đưa ra một đánh giá ngắn gọn về việc KBD này đã đáp ứng đầy đủ các yêu cầu cơ bản của Công văn 5112 hay chưa (đặc biệt là việc chuyển từ "Giáo án truyền thống" sang "Kế hoạch Bài dạy phát triển năng lực").
 
 Phần 4: Lời Khẳng định (Affirmation)
-Hãy nhớ: Mọi KBD đều phải được trình bày một cách sạch sẽ, logic, dễ đọc và có thể sao chép trực tiếp để sử dụng. Bắt đầu bằng việc giới thiệu bản thân và hỏi thông tin cần thiết.`;
+Hãy nhớ: Mọi KHBD đều phải được trình bày một cách sạch sẽ, logic, dễ đọc và có thể sao chép trực tiếp để sử dụng. Bắt đầu bằng việc giới thiệu bản thân và hỏi thông tin cần thiết.`;
             // --- Helper Functions ---
 
             function showLoading(isLoading) {
@@ -286,6 +290,12 @@ Hãy nhớ: Mọi KBD đều phải được trình bày một cách sạch sẽ
             // --- Main Generation Function ---
 
             window.generateLessonPlan = async function() {
+                // Kiểm tra sự tồn tại của khóa API
+                if (apiKey === "YOUR_GEMINI_API_KEY_HERE" || !apiKey) {
+                    showError("Lỗi: Khóa API chưa được thiết lập. Vui lòng dán khóa API Gemini của bạn vào biến 'apiKey' trong mã nguồn.");
+                    return;
+                }
+
                 const subject = document.getElementById('subject').value.trim();
                 const grade = document.getElementById('grade').value.trim();
                 const topic = document.getElementById('topic').value.trim();
@@ -327,7 +337,15 @@ Hãy nhớ: Mọi KBD đều phải được trình bày một cách sạch sẽ
                         });
 
                         if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
+                            // Cố gắng đọc thông báo lỗi từ API
+                            const errorData = await response.json();
+                            let errorMessageDetail = `Lỗi HTTP: ${response.status}. `;
+                            if (errorData.error && errorData.error.message) {
+                                errorMessageDetail += `Chi tiết: ${errorData.error.message}`;
+                            } else {
+                                errorMessageDetail += "Vui lòng kiểm tra khóa API và giới hạn sử dụng.";
+                            }
+                            throw new Error(errorMessageDetail);
                         }
 
                         const result = await response.json();
@@ -353,7 +371,7 @@ Hãy nhớ: Mọi KBD đều phải được trình bày một cách sạch sẽ
                             const delay = Math.pow(2, attempt) * 1000;
                             await new Promise(resolve => setTimeout(resolve, delay));
                         } else {
-                            showError("Đã xảy ra lỗi hệ thống hoặc AI không thể tạo cấu trúc. Vui lòng thử lại sau.");
+                            showError(`Đã xảy ra lỗi hệ thống hoặc mạng sau ${maxRetries} lần thử. Chi tiết: ${error.message}`);
                             showLoading(false);
                             return;
                         }
