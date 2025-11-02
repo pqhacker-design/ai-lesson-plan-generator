@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Soạn Kế Hoạch Bài Dạy (Thông tư 5512)</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Thư viện cần thiết cho việc xuất PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
         body {
@@ -17,6 +22,12 @@
         }
         .activity-card {
             border-left: 4px solid #3b82f6;
+        }
+        /* Ẩn các nút điều khiển khi chuẩn bị xuất PDF */
+        @media print {
+            .no-print {
+                display: none !important;
+            }
         }
     </style>
 </head>
@@ -33,7 +44,7 @@
         <p class="text-center text-gray-600 mb-8">Trợ lý ảo giúp giáo viên các cấp tạo giáo án theo định hướng phát triển năng lực học sinh.</p>
 
         <!-- Input Form -->
-        <div id="input-form" class="container-box p-6 md:p-8 rounded-xl transition-all duration-300">
+        <div id="input-form" class="container-box p-6 md:p-8 rounded-xl transition-all duration-300 no-print">
             <h2 class="2xl font-semibold text-gray-800 mb-6">Thông Tin Bài Học</h2>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -49,12 +60,10 @@
                     <label for="topic" class="block text-sm font-medium text-gray-700 mb-1">Chủ đề/Tên bài học:</label>
                     <input type="text" id="topic" value="Tác phẩm Chí Phèo (Nam Cao)" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150" placeholder="Ví dụ: Định lý Py-ta-go, Chiến tranh thế giới thứ nhất">
                 </div>
-                <!-- START: Trường mới cho Tỉnh/Thành phố -->
                 <div>
                     <label for="province" class="block text-sm font-medium text-gray-700 mb-1">Tỉnh/Thành phố công tác:</label>
                     <input type="text" id="province" value="Kiên Giang" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150" placeholder="Ví dụ: Hà Nội, TP.HCM, Kiên Giang">
                 </div>
-                <!-- END: Trường mới cho Tỉnh/Thành phố -->
                 <div>
                     <label for="duration" class="block text-sm font-medium text-gray-700 mb-1">Thời lượng (Số tiết):</label>
                     <input type="text" id="duration" value="3 Tiết" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150" placeholder="Ví dụ: 2 tiết, 90 phút">
@@ -78,6 +87,16 @@
             <div id="lesson-plan-output" class="container-box p-6 md:p-10 rounded-xl">
                 <!-- Content will be injected here -->
             </div>
+            
+            <!-- Nút Tải Xuống PDF -->
+            <div class="mt-6 flex justify-center no-print">
+                <button id="pdf-download-btn" onclick="exportToPdf()" class="px-8 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition duration-200 focus:outline-none focus:ring-4 focus:ring-red-300 flex items-center justify-center disabled:opacity-50" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-text-2 mr-2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+                    Tải Xuống PDF
+                </button>
+            </div>
+            <!-- Kết thúc Nút Tải Xuống PDF -->
+            
             <div id="error-message" class="hidden mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
                 <strong class="font-bold">Lỗi:</strong>
                 <span id="error-text" class="block sm:inline">Không thể tạo giáo án. Vui lòng thử lại hoặc kiểm tra kết nối.</span>
@@ -87,16 +106,14 @@
         <!-- Utility Functions and AI Logic -->
         <script type="module">
             // --- FIREBASE AND ENVIRONMENT SETUP ---
-            // NOTE: Bạn cần DÁN KHÓA API của mình vào đây để ứng dụng chạy trên GitHub Pages
-            // (Ví dụ: const apiKey = "AIzaSy...your...key";)
+            // LƯU Ý QUAN TRỌNG: Bạn cần DÁN KHÓA API Gemini của mình vào đây để ứng dụng chạy trên GitHub Pages
             const apiKey = "AIzaSyA2zWfhpxrRhH_Pb0Y2t3TcmzO8euqOLnw"; // <<< THAY THẾ CHUỖI NÀY BẰNG KHÓA API CỦA BẠN
             
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
             
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-            // NOTE: Firestore is not strictly needed for this self-contained generation app, 
-            // but the setup variables are required to be present as per instructions.
+            
 
             // --- UI Elements ---
             const generateBtn = document.getElementById('generate-btn');
@@ -106,10 +123,13 @@
             const lessonPlanOutput = document.getElementById('lesson-plan-output');
             const errorMessage = document.getElementById('error-message');
             const errorText = document.getElementById('error-text');
-            
-            // --- GEMINI API Configuration ---
+            const pdfDownloadBtn = document.getElementById('pdf-download-btn'); // Nút mới
 
-            // JSON Schema defining the required output structure for the lesson plan
+            // Khởi tạo nút PDF bị vô hiệu hóa
+            pdfDownloadBtn.disabled = true;
+            
+            // --- GEMINI API Configuration (Same as before) ---
+
             const LESSON_PLAN_SCHEMA = {
                 type: "OBJECT",
                 properties: {
@@ -148,13 +168,13 @@
                     Phần 1: Vai trò và Nhiệm vụ (Role and Goal)
 [Vai trò] Bạn là một Trợ lý Sư phạm Chuyên sâu về xây dựng Kế hoạch Bài dạy (Giáo án) theo chuẩn Bộ Giáo dục và Đào tạo, đặc biệt là cấp Trung học Cơ sở (THCS).
 
-[Mục tiêu] Nhiệm vụ của bạn là viết, kiểm tra, và hoàn thiện Kế hoạch Bài dạy (KHBD) cho giáo viên THCS theo đúng yêu cầu về nội dung và hình thức của Công văn 5112/BGDĐT-GDTrH ngày 01/12/2020, đảm bảo tính khoa học, sư phạm và phù hợp với thực tiễn.
+[Mục tiêu] Nhiệm vụ của bạn là viết, kiểm tra, và hoàn thiện Kế hoạch Bài dạy (KBD) cho giáo viên THCS theo đúng yêu cầu về nội dung và hình thức của Công văn 5112/BGDĐT-GDTrH ngày 01/12/2020, đảm bảo tính khoa học, sư phạm và phù hợp với thực tiễn.
 
 [Nguyên tắc làm việc] Luôn đặt mục tiêu phát triển phẩm chất và năng lực học sinh làm trọng tâm.
 
-Phần 2: Yêu cầu về Nội dung và Cấu trúc KHBD (Content and Structure Requirements)
-[Cấu trúc KHBD] Kế hoạch Bài dạy bạn tạo ra phải tuân thủ cấu trúc của một KHBD đầy đủ theo yêu cầu mới, bao gồm các thành phần sau:
-Luôn sử dụng định dạng **LaTeX** ($a^2 + b^2 = c^2$) cho công thức toán học và khoa học.
+Phần 2: Yêu cầu về Nội dung và Cấu trúc KBD (Content and Structure Requirements)
+[Cấu trúc KHBD] Kế hoạch Bài dạy bạn tạo ra phải tuân thủ cấu trúc của một KBD đầy đủ theo yêu cầu mới, bao gồm các thành phần sau:
+
 Tên Bài dạy/Chủ đề: (Ví dụ: Bài 1. Số hữu tỉ - Toán 7)
 
 Thời lượng: (Số tiết, ngày/buổi thực hiện)
@@ -184,7 +204,7 @@ Hoạt động 3: Luyện tập/Thực hành (Củng cố kiến thức, kĩ nă
 Hoạt động 4: Vận dụng/Tìm tòi mở rộng (Giao nhiệm vụ về nhà, liên hệ thực tiễn)
 
 [Chi tiết Tiến trình Dạy học] Trong mục Tiến trình Dạy học, mỗi Hoạt động phải được trình bày dưới dạng một bảng hoặc list với đầy đủ các cột/mục: Mục tiêu, Nội dung (công việc cụ thể của HS), Sản phẩm (dự kiến), Tổ chức thực hiện (chi tiết hoạt động của GV và HS).
-
+Luôn sử dụng định dạng **LaTeX** ($a^2 + b^2 = c^2$) cho công thức toán học và khoa học.
 Phần 3: Quy trình Tương tác (Interaction Protocol)
 Chào hỏi & Thu thập thông tin: Khi bắt đầu, bạn hãy hỏi giáo viên các thông tin cốt lõi sau:
 
@@ -203,7 +223,7 @@ Phản hồi & Tinh chỉnh (Lượt 2+): Sau khi giáo viên cung cấp thêm t
 Kiểm tra Công văn 5112: Cuối cùng, khi KBD đã hoàn thành, hãy đưa ra một đánh giá ngắn gọn về việc KBD này đã đáp ứng đầy đủ các yêu cầu cơ bản của Công văn 5112 hay chưa (đặc biệt là việc chuyển từ "Giáo án truyền thống" sang "Kế hoạch Bài dạy phát triển năng lực").
 
 Phần 4: Lời Khẳng định (Affirmation)
-Hãy nhớ: Mọi KHBD đều phải được trình bày một cách sạch sẽ, logic, dễ đọc và có thể sao chép trực tiếp để sử dụng. Bắt đầu bằng việc giới thiệu bản thân và hỏi thông tin cần thiết.`;
+Hãy nhớ: Mọi KBD đều phải được trình bày một cách sạch sẽ, logic, dễ đọc và có thể sao chép trực tiếp để sử dụng. Bắt đầu bằng việc giới thiệu bản thân và hỏi thông tin cần thiết.`;
             // --- Helper Functions ---
 
             function showLoading(isLoading) {
@@ -213,6 +233,7 @@ Hãy nhớ: Mọi KHBD đều phải được trình bày một cách sạch s�
                     loadingSpinner.classList.remove('hidden');
                     errorMessage.classList.add('hidden');
                     outputSection.classList.add('hidden');
+                    pdfDownloadBtn.disabled = true; // Vô hiệu hóa nút PDF khi đang tạo
                 } else {
                     btnText.textContent = 'Tạo Kế Hoạch Bài Dạy';
                     loadingSpinner.classList.add('hidden');
@@ -223,9 +244,9 @@ Hãy nhớ: Mọi KHBD đều phải được trình bày một cách sạch s�
                 errorText.textContent = message;
                 errorMessage.classList.remove('hidden');
                 outputSection.classList.add('hidden');
+                pdfDownloadBtn.disabled = true; // Vô hiệu hóa nút PDF khi có lỗi
             }
 
-            // Cập nhật hàm generatePrompt để nhận thêm tham số 'province'
             function generatePrompt(subject, grade, topic, duration, province) {
                 return `Hãy soạn thảo Kế hoạch Bài Dạy (Giáo án) cho môn ${subject}, cấp học ${grade}, với chủ đề/bài học là "${topic}". Thời lượng dự kiến là ${duration}. Bài giảng cần tích hợp nội dung giáo dục địa phương phù hợp với tỉnh/thành phố: ${province}. Hãy đảm bảo kế hoạch chi tiết, có các bước Khởi động, Hình thành Kiến thức, Luyện tập, Vận dụng và thể hiện rõ các mục tiêu về Kiến thức, Năng lực, Phẩm chất.`;
             }
@@ -290,7 +311,6 @@ Hãy nhớ: Mọi KHBD đều phải được trình bày một cách sạch s�
             // --- Main Generation Function ---
 
             window.generateLessonPlan = async function() {
-                // Kiểm tra sự tồn tại của khóa API
                 if (apiKey === "YOUR_GEMINI_API_KEY_HERE" || !apiKey) {
                     showError("Lỗi: Khóa API chưa được thiết lập. Vui lòng dán khóa API Gemini của bạn vào biến 'apiKey' trong mã nguồn.");
                     return;
@@ -299,19 +319,18 @@ Hãy nhớ: Mọi KHBD đều phải được trình bày một cách sạch s�
                 const subject = document.getElementById('subject').value.trim();
                 const grade = document.getElementById('grade').value.trim();
                 const topic = document.getElementById('topic').value.trim();
-                const province = document.getElementById('province').value.trim(); // Lấy giá trị Tỉnh/Thành phố
+                const province = document.getElementById('province').value.trim(); 
                 const duration = document.getElementById('duration').value.trim();
 
-                // Cập nhật điều kiện kiểm tra dữ liệu đầu vào
                 if (!subject || !grade || !topic || !duration || !province) { 
-                    showError("Vui lòng điền đầy đủ tất cả các trường thông tin (Môn học, Khối/Cấp, Chủ đề, Tỉnh/Thành phố, Thời lượng).");
+                    showError("Vui lòng điền đầy đủ tất cả các trường thông tin.");
                     return;
                 }
 
                 showLoading(true);
+                pdfDownloadBtn.disabled = true; // Đảm bảo nút tải về bị khóa
                 lessonPlanOutput.innerHTML = '';
                 
-                // Truyền province vào hàm generatePrompt
                 const userQuery = generatePrompt(subject, grade, topic, duration, province);
 
                 const payload = {
@@ -337,7 +356,6 @@ Hãy nhớ: Mọi KHBD đều phải được trình bày một cách sạch s�
                         });
 
                         if (!response.ok) {
-                            // Cố gắng đọc thông báo lỗi từ API
                             const errorData = await response.json();
                             let errorMessageDetail = `Lỗi HTTP: ${response.status}. `;
                             if (errorData.error && errorData.error.message) {
@@ -360,6 +378,7 @@ Hãy nhớ: Mọi KHBD đều phải được trình bày một cách sạch s�
                         // Render the structured plan
                         lessonPlanOutput.innerHTML = formatLessonPlan(lessonPlanData);
                         outputSection.classList.remove('hidden');
+                        pdfDownloadBtn.disabled = false; // Bật nút tải về
                         showLoading(false);
                         return;
 
@@ -367,7 +386,6 @@ Hãy nhớ: Mọi KHBD đều phải được trình bày một cách sạch s�
                         console.error("Lỗi trong quá trình tạo giáo án:", error);
                         attempt++;
                         if (attempt < maxRetries) {
-                            // Exponential backoff
                             const delay = Math.pow(2, attempt) * 1000;
                             await new Promise(resolve => setTimeout(resolve, delay));
                         } else {
@@ -378,8 +396,70 @@ Hãy nhớ: Mọi KHBD đều phải được trình bày một cách sạch s�
                     }
                 }
             }
+            
+            // --- PDF Export Function ---
+
+            window.exportToPdf = async function() {
+                // Sử dụng window.jspdf.jsPDF từ CDN đã load
+                const { jsPDF } = window.jspdf; 
+                const element = document.getElementById('lesson-plan-output');
+                
+                // Tạm thời hiển thị trạng thái loading trên nút
+                const originalBtnContent = pdfDownloadBtn.innerHTML;
+                pdfDownloadBtn.innerHTML = `<svg class="animate-spin h-5 w-5 text-white mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Đang Tạo PDF...`;
+                pdfDownloadBtn.disabled = true;
+
+                try {
+                    // Đảm bảo nền là trắng để nhất quán
+                    element.style.backgroundColor = 'white'; 
+                    
+                    // Chụp ảnh nội dung HTML
+                    const canvas = await html2canvas(element, { 
+                        scale: 2, // Tăng độ phân giải ảnh chụp
+                        useCORS: true 
+                    });
+
+                    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                    const pdf = new jsPDF('p', 'mm', 'a4'); // Khởi tạo PDF A4
+
+                    const imgWidth = 210; // Chiều rộng A4 (mm)
+                    const pageHeight = 297; // Chiều cao A4 (mm)
+                    const imgHeight = canvas.height * imgWidth / canvas.width;
+                    let heightLeft = imgHeight;
+                    let position = 0;
+
+                    // Thêm trang đầu tiên
+                    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+
+                    // Thêm các trang còn lại nếu nội dung dài
+                    while (heightLeft >= -1) { // -1 để bắt kịp phần nhỏ còn lại
+                        position = heightLeft - imgHeight;
+                        pdf.addPage();
+                        // Cộng thêm một chút margin (e.g., 5mm) để tránh bị sát lề
+                        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+                        heightLeft -= pageHeight;
+                    }
+                    
+                    // Tạo tên file
+                    const topic = document.getElementById('topic').value.trim() || 'KeHoachBaiDay';
+                    const fileName = `KHBaiDay_${topic.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+
+                    pdf.save(fileName);
+                    
+                } catch (error) {
+                    console.error("Lỗi khi xuất PDF:", error);
+                    // Không dùng alert(), dùng console.error()
+                    const outputMessage = document.getElementById('lesson-plan-output');
+                    outputMessage.innerHTML += `<div class="mt-4 text-red-600 font-semibold">Lỗi xuất PDF: Vui lòng kiểm tra console hoặc thử lại.</div>`;
+                } finally {
+                    // Khôi phục trạng thái nút
+                    pdfDownloadBtn.innerHTML = originalBtnContent;
+                    pdfDownloadBtn.disabled = false;
+                    element.style.backgroundColor = ''; // Xóa nền trắng tạm thời
+                }
+            }
         </script>
     </div>
 </body>
 </html>
-
